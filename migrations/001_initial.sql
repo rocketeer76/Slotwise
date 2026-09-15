@@ -1,0 +1,12 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE TABLE workspaces (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE users (id uuid PRIMARY KEY, workspace_id uuid NOT NULL REFERENCES workspaces(id), email text NOT NULL, name text NOT NULL, role text NOT NULL CHECK (role IN ('user','resource_manager','administrator')), UNIQUE (workspace_id, email));
+CREATE TABLE resource_types (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), workspace_id uuid NOT NULL REFERENCES workspaces(id), name text NOT NULL, UNIQUE (workspace_id, name));
+CREATE TABLE resources (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), workspace_id uuid NOT NULL REFERENCES workspaces(id), type_id uuid REFERENCES resource_types(id), name text NOT NULL, location text, capacity integer CHECK (capacity > 0), description text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'available' CHECK (status IN ('available','unavailable','maintenance')), image_object_key text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE resource_amenities (resource_id uuid NOT NULL REFERENCES resources(id) ON DELETE CASCADE, amenity text NOT NULL, PRIMARY KEY (resource_id, amenity));
+CREATE TABLE bookings (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), resource_id uuid NOT NULL REFERENCES resources(id), user_id uuid NOT NULL REFERENCES users(id), starts_at timestamptz NOT NULL, ends_at timestamptz NOT NULL, title text NOT NULL, description text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed','cancelled','pending')), created_at timestamptz NOT NULL DEFAULT now(), CHECK (ends_at > starts_at));
+ALTER TABLE bookings ADD CONSTRAINT bookings_no_overlap EXCLUDE USING gist (resource_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&) WHERE (status IN ('confirmed','pending'));
+CREATE TABLE booking_attendees (booking_id uuid NOT NULL REFERENCES bookings(id) ON DELETE CASCADE, user_id uuid NOT NULL REFERENCES users(id), PRIMARY KEY (booking_id, user_id));
+CREATE TABLE booking_activities (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), booking_id uuid NOT NULL REFERENCES bookings(id) ON DELETE CASCADE, actor_id uuid REFERENCES users(id), action text NOT NULL, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX bookings_calendar_idx ON bookings (resource_id, starts_at, ends_at);
