@@ -1,3 +1,5 @@
+[![Slotwise](public/media/social/og-card.png)](https://slotwiseapp.netlify.app/)
+
 # Slotwise
 
 Shared resources, smarter booking.
